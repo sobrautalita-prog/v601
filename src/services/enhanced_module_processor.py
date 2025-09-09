@@ -14,6 +14,18 @@ from typing import Dict, List, Any, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from services.ai_manager import ai_manager
 from services.auto_save_manager import salvar_etapa, salvar_erro
+from services.avatar_generation_system import AvatarGenerationSystem
+from services.mental_drivers_architect import MentalDriversArchitect
+from services.mental_drivers_system import MentalDriversSystem
+from services.anti_objection_system import AntiObjectionSystem
+from services.visual_proofs_generator import VisualProofsGenerator
+from services.pre_pitch_architect import PrePitchArchitect
+from services.predictive_analytics_engine import PredictiveAnalyticsEngine
+from services.forensic_cpl_analyzer import ForensicCPLAnalyzer
+from services.psychological_agents import PsychologicalAgents
+from services.future_prediction_engine import FuturePredictionEngine
+from services.archaeological_master import ArchaeologicalMaster
+from services.viral_analyzer import ViralAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -22,48 +34,64 @@ class EnhancedModuleProcessor:
 
     def __init__(self):
         """Inicializa processador completo"""
+        # Inicializa TODOS os sistemas especializados
+        self.avatar_system = AvatarGenerationSystem()
+        self.mental_drivers_architect = MentalDriversArchitect()
+        self.mental_drivers_system = MentalDriversSystem()
+        self.anti_objection_system = AntiObjectionSystem()
+        self.visual_proofs_generator = VisualProofsGenerator()
+        self.pre_pitch_architect = PrePitchArchitect()
+        self.predictive_analytics = PredictiveAnalyticsEngine()
+        self.forensic_cpl_analyzer = ForensicCPLAnalyzer()
+        self.psychological_agents = PsychologicalAgents()
+        self.future_prediction_engine = FuturePredictionEngine()
+        self.archaeological_master = ArchaeologicalMaster()
+        self.viral_analyzer = ViralAnalyzer()
+        
+        logger.info("🚀 TODOS os sistemas especializados inicializados!")
+        
         # TODOS OS MÓDULOS OBRIGATÓRIOS
         self.required_modules = {
             'avatars': {
                 'name': 'Avatar Ultra-Detalhado Completo',
                 'priority': 1,
                 'required': True,
-                'processor': self._process_avatar_ultra_detalhado,
+                'processor': self._process_avatar_sistema_avancado,
                 'validation': self._validate_avatar_complete
             },
             'drivers_mentais': {
                 'name': '19 Drivers Mentais Customizados',
                 'priority': 2,
                 'required': True,
-                'processor': self._process_drivers_mentais_completos,
+                'processor': self._process_drivers_mentais_especializados,
                 'validation': self._validate_drivers_complete
             },
             'anti_objecao': {
                 'name': 'Sistema Anti-Objeção Completo',
                 'priority': 3,
                 'required': True,
-                'processor': self._process_anti_objecao_completo,
+                'processor': self._process_anti_objecao_especializado,
                 'validation': self._validate_anti_objecao_complete
             },
             'provas_visuais': {
                 'name': 'Arsenal de Provas Visuais',
                 'priority': 4,
                 'required': True,
-                'processor': self._process_provas_visuais_completas,
+                'processor': self._process_provas_visuais_especializadas,
                 'validation': self._validate_provas_visuais_complete
             },
             'pre_pitch': {
                 'name': 'Pré-Pitch Invisível Completo',
                 'priority': 5,
                 'required': True,
-                'processor': self._process_pre_pitch_completo,
+                'processor': self._process_pre_pitch_especializado,
                 'validation': self._validate_pre_pitch_complete
             },
             'predicoes_futuro': {
                 'name': 'Predições Futuras Detalhadas',
                 'priority': 6,
                 'required': True,
-                'processor': self._process_predicoes_futuro_completas,
+                'processor': self._process_predicoes_futuro_especializadas,
                 'validation': self._validate_predicoes_complete
             },
             'concorrencia': {
@@ -199,7 +227,10 @@ class EnhancedModuleProcessor:
                     processing_results["processing_summary"]["modules_with_warnings"] += 1
 
                 # Salva módulo individual IMEDIATAMENTE
-                salvar_etapa(f"modulo_{module_name}", module_result, categoria=module_name)
+                salvar_etapa(f"modulo_{module_name}", module_result, categoria=module_name, session_id=session_id)
+                
+                # Salva também no diretório modules da sessão
+                self._save_module_to_session_directory(session_id, module_name, module_result)
 
             except Exception as e:
                 logger.error(f"❌ ERRO CRÍTICO no módulo {module_name}: {e}")
@@ -224,12 +255,36 @@ class EnhancedModuleProcessor:
 
         # Salva resultado consolidado
         processing_results["processing_completed"] = datetime.now().isoformat()
-        salvar_etapa("modules_processing_complete", processing_results, categoria="completas")
+        salvar_etapa("modules_processing_complete", processing_results, categoria="completas", session_id=session_id)
 
         logger.info(f"✅ PROCESSAMENTO COMPLETO: {success_rate:.1f}% de sucesso")
         logger.info(f"📊 {processing_results['processing_summary']['successful_modules']}/{total_modules} módulos processados")
 
         return processing_results
+
+    def _save_module_to_session_directory(self, session_id: str, module_name: str, module_result: Dict[str, Any]):
+        """
+        Salva módulo no diretório modules da sessão
+        
+        Args:
+            session_id: ID da sessão
+            module_name: Nome do módulo
+            module_result: Resultado do módulo
+        """
+        try:
+            # Cria diretório modules se não existir
+            modules_dir = f"analyses_data/{session_id}/modules"
+            os.makedirs(modules_dir, exist_ok=True)
+            
+            # Salva módulo individual
+            module_file = f"{modules_dir}/{module_name}.json"
+            with open(module_file, 'w', encoding='utf-8') as f:
+                json.dump(module_result, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"💾 Módulo {module_name} salvo em {module_file}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao salvar módulo {module_name} no diretório da sessão: {e}")
 
     def _process_single_module_complete(
         self,
@@ -1825,13 +1880,296 @@ RETORNE JSON com posicionamento COMPLETO:
         }
 
 # Implementações de emergência para os outros módulos...
+    async def _process_avatar_sistema_avancado(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Avatar usando Sistema Avançado Especializado"""
+        
+        try:
+            logger.info("🎯 Iniciando geração de avatares com sistema avançado...")
+            
+            # Gera 4 avatares únicos usando o sistema especializado
+            avatares_completos = await self.avatar_system.gerar_4_avatares_unicos(
+                segmento=context.get('segmento', ''),
+                produto=context.get('produto', ''),
+                publico=context.get('publico', ''),
+                contexto_nicho=f"{context.get('segmento', '')} - {context.get('produto', '')}",
+                dados_coletados=massive_data
+            )
+            
+            logger.info(f"✅ Sistema avançado gerou {len(avatares_completos)} avatares completos!")
+            
+            return {
+                "avatares_ultra_detalhados": avatares_completos,
+                "total_avatares": len(avatares_completos),
+                "sistema_utilizado": "Avatar Generation System V3.0",
+                "qualidade": "Ultra-Detalhado com Dados Reais",
+                "estruturas_incluidas": [
+                    "Dados Demográficos Completos",
+                    "Perfil Psicológico MBTI",
+                    "Contexto Digital Detalhado", 
+                    "Dores e Objetivos Específicos",
+                    "Comportamento de Consumo",
+                    "História Pessoal Realista",
+                    "Dia na Vida Detalhado",
+                    "Jornada do Cliente Mapeada",
+                    "Drivers Mentais Efetivos",
+                    "Scripts Personalizados",
+                    "Métricas de Conversão"
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no sistema avançado de avatares: {e}")
+            return self._create_emergency_avatar(context, massive_data)
+
     def _create_emergency_avatar(self, context: Dict[str, Any], massive_data: Dict[str, Any]) -> Dict[str, Any]:
         """Cria avatar de emergência estruturado"""
         return self._create_structured_avatar(context, massive_data)
 
+    async def _process_drivers_mentais_especializados(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Drivers Mentais usando Sistemas Especializados"""
+        
+        try:
+            logger.info("🧠 Iniciando análise de drivers mentais especializados...")
+            
+            # Usa o Mental Drivers Architect para análise avançada
+            drivers_architect_result = await self.mental_drivers_architect.analyze_mental_drivers(
+                context=context,
+                massive_data=massive_data,
+                session_id=session_id
+            )
+            
+            # Usa o Mental Drivers System para processamento completo
+            drivers_system_result = await self.mental_drivers_system.process_complete_drivers(
+                context=context,
+                data=massive_data,
+                architect_analysis=drivers_architect_result
+            )
+            
+            logger.info("✅ Drivers mentais especializados processados com sucesso!")
+            
+            return {
+                "drivers_mentais_completos": drivers_system_result,
+                "analise_arquitetural": drivers_architect_result,
+                "total_drivers_identificados": len(drivers_system_result.get('drivers', [])),
+                "sistema_utilizado": "Mental Drivers Architect + System V3.0",
+                "qualidade": "Análise Psicológica Profunda"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro nos drivers mentais especializados: {e}")
+            return self._create_emergency_drivers(context)
+
+    async def _process_anti_objecao_especializado(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Anti-Objeção usando Sistema Especializado"""
+        
+        try:
+            logger.info("🛡️ Iniciando sistema anti-objeção especializado...")
+            
+            # Usa o sistema especializado de anti-objeção
+            anti_objection_result = await self.anti_objection_system.generate_complete_system(
+                context=context,
+                massive_data=massive_data,
+                session_id=session_id
+            )
+            
+            logger.info("✅ Sistema anti-objeção especializado processado!")
+            
+            return {
+                "sistema_anti_objecao": anti_objection_result,
+                "sistema_utilizado": "Anti Objection System V3.0",
+                "qualidade": "Respostas Especializadas para Objeções"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no sistema anti-objeção: {e}")
+            return self._create_emergency_anti_objection(context)
+
+    async def _process_provas_visuais_especializadas(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Provas Visuais usando Sistema Especializado"""
+        
+        try:
+            logger.info("📸 Iniciando geração de provas visuais especializadas...")
+            
+            # Usa o sistema especializado de provas visuais
+            visual_proofs_result = await self.visual_proofs_generator.generate_complete_proofs(
+                context=context,
+                massive_data=massive_data,
+                session_id=session_id
+            )
+            
+            logger.info("✅ Provas visuais especializadas geradas!")
+            
+            return {
+                "provas_visuais_completas": visual_proofs_result,
+                "sistema_utilizado": "Visual Proofs Generator V3.0",
+                "qualidade": "Arsenal Completo de Provas Visuais"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro nas provas visuais: {e}")
+            return self._create_emergency_visual_proofs(context)
+
+    async def _process_pre_pitch_especializado(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Pré-Pitch usando Sistema Especializado"""
+        
+        try:
+            logger.info("🎯 Iniciando pré-pitch especializado...")
+            
+            # Usa o sistema especializado de pré-pitch
+            pre_pitch_result = await self.pre_pitch_architect.create_invisible_pre_pitch(
+                context=context,
+                massive_data=massive_data,
+                session_id=session_id
+            )
+            
+            logger.info("✅ Pré-pitch especializado criado!")
+            
+            return {
+                "pre_pitch_invisivel": pre_pitch_result,
+                "sistema_utilizado": "Pre Pitch Architect V3.0",
+                "qualidade": "Pré-Pitch Invisível Especializado"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro no pré-pitch: {e}")
+            return self._create_emergency_pre_pitch(context)
+
+    async def _process_predicoes_futuro_especializadas(
+        self,
+        massive_data: Dict[str, Any],
+        context: Dict[str, Any],
+        session_id: str
+    ) -> Dict[str, Any]:
+        """Processa Predições Futuras usando Sistemas Especializados"""
+        
+        try:
+            logger.info("🔮 Iniciando predições futuras especializadas...")
+            
+            # Usa o sistema de análise preditiva
+            predictive_result = await self.predictive_analytics.analyze_future_trends(
+                context=context,
+                massive_data=massive_data,
+                session_id=session_id
+            )
+            
+            # Usa o engine de predições futuras
+            future_predictions = await self.future_prediction_engine.generate_predictions(
+                context=context,
+                data=massive_data,
+                predictive_analysis=predictive_result
+            )
+            
+            logger.info("✅ Predições futuras especializadas geradas!")
+            
+            return {
+                "predicoes_futuras": future_predictions,
+                "analise_preditiva": predictive_result,
+                "sistema_utilizado": "Predictive Analytics + Future Prediction Engine V3.0",
+                "qualidade": "Predições Baseadas em Dados Massivos"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro nas predições futuras: {e}")
+            return self._create_emergency_predictions(context)
+
     def _create_emergency_drivers(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Cria drivers de emergência"""
         return self._create_emergency_drivers_complete(context)
+
+    def _create_emergency_anti_objection(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Cria sistema anti-objeção de emergência"""
+        return {
+            "sistema_anti_objecao": {
+                "objecoes_principais": [
+                    "Muito caro",
+                    "Não tenho tempo",
+                    "Preciso pensar",
+                    "Vou conversar com minha esposa/marido",
+                    "Não confio em vendas online"
+                ],
+                "respostas_padrao": {
+                    "preco": "Entendo sua preocupação com o investimento. Vamos analisar o retorno...",
+                    "tempo": "Sei que tempo é precioso. Por isso criamos um sistema que economiza tempo...",
+                    "decisao": "É natural querer refletir. Que tal esclarecer suas dúvidas agora?"
+                }
+            },
+            "sistema_utilizado": "Fallback Emergency System",
+            "qualidade": "Básico"
+        }
+
+    def _create_emergency_visual_proofs(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Cria provas visuais de emergência"""
+        return {
+            "provas_visuais_completas": {
+                "tipos_prova": [
+                    "Depoimentos em vídeo",
+                    "Screenshots de resultados",
+                    "Certificados e premiações",
+                    "Cases de sucesso",
+                    "Demonstrações práticas"
+                ],
+                "estrategia_visual": "Usar elementos visuais que comprovem credibilidade e resultados"
+            },
+            "sistema_utilizado": "Fallback Emergency System",
+            "qualidade": "Básico"
+        }
+
+    def _create_emergency_pre_pitch(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Cria pré-pitch de emergência"""
+        return {
+            "pre_pitch_invisivel": {
+                "estrategia": "Construir rapport antes da apresentação principal",
+                "elementos": [
+                    "Quebra-gelo personalizado",
+                    "Identificação de dores",
+                    "Criação de urgência sutil",
+                    "Estabelecimento de autoridade"
+                ]
+            },
+            "sistema_utilizado": "Fallback Emergency System",
+            "qualidade": "Básico"
+        }
+
+    def _create_emergency_predictions(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Cria predições de emergência"""
+        return {
+            "predicoes_futuras": {
+                "tendencias_mercado": [
+                    "Crescimento do digital",
+                    "Personalização em massa",
+                    "Sustentabilidade",
+                    "Inteligência artificial"
+                ],
+                "oportunidades": "Mercado em expansão com demanda crescente"
+            },
+            "sistema_utilizado": "Fallback Emergency System",
+            "qualidade": "Básico"
+        }
 
     def _create_emergency_drivers_complete(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Cria drivers completos de emergência"""

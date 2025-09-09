@@ -202,6 +202,53 @@ DADOS PARA ANÁLISE:
 """
         }
 
+    async def execute_enhanced_synthesis_with_massive_data(
+        self,
+        session_id: str,
+        massive_data: Dict[str, Any],
+        synthesis_type: str = "master_synthesis"
+    ) -> Dict[str, Any]:
+        """
+        Executa síntese aprimorada usando o JSON massivo consolidado da etapa 1
+        
+        Args:
+            session_id: ID da sessão
+            massive_data: JSON massivo consolidado da etapa 1
+            synthesis_type: Tipo de síntese a executar
+        
+        Returns:
+            Dict: Resultado da síntese
+        """
+        
+        logger.info(f"🧠 Executando síntese aprimorada com dados massivos - Sessão: {session_id}")
+        logger.info(f"📊 Dados massivos: {massive_data['consolidated_statistics']['total_data_size']} caracteres")
+        
+        try:
+            # Prepara contexto com dados massivos
+            synthesis_context = self._prepare_massive_data_context(massive_data, session_id)
+            
+            # Executa síntese com IA usando dados massivos
+            synthesis_result = await self._execute_ai_synthesis_with_massive_data(
+                synthesis_context, synthesis_type, session_id, massive_data
+            )
+            
+            # Salva resultado
+            from services.auto_save_manager import salvar_etapa
+            salvar_etapa(f"synthesis_{synthesis_type}", synthesis_result, categoria="synthesis", session_id=session_id)
+            
+            logger.info(f"✅ Síntese {synthesis_type} concluída com dados massivos")
+            return synthesis_result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na síntese com dados massivos: {e}")
+            return {
+                "session_id": session_id,
+                "synthesis_type": synthesis_type,
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
     async def execute_enhanced_synthesis(
         self, 
         session_id: str,
@@ -575,6 +622,173 @@ DADOS PARA ANÁLISE:
             count += text_lower.count(indicator)
         
         return count
+
+    def _prepare_massive_data_context(self, massive_data: Dict[str, Any], session_id: str) -> str:
+        """
+        Prepara contexto otimizado a partir do JSON massivo
+        
+        Args:
+            massive_data: JSON massivo consolidado
+            session_id: ID da sessão
+        
+        Returns:
+            str: Contexto formatado para a IA
+        """
+        
+        logger.info(f"📝 Preparando contexto massivo para síntese - Sessão: {session_id}")
+        
+        # Extrai estatísticas principais
+        stats = massive_data.get('consolidated_statistics', {})
+        
+        # Monta contexto estruturado
+        context = f"""
+# DADOS CONSOLIDADOS DA ETAPA 1 - SESSÃO {session_id}
+
+## ESTATÍSTICAS GERAIS
+- **Total de Fontes de Busca**: {stats.get('total_search_sources', 0)}
+- **Tamanho Total do Conteúdo**: {stats.get('total_content_length', 0)} caracteres
+- **Conteúdo Viral Encontrado**: {stats.get('total_viral_content', 0)} itens
+- **Imagens Virais Salvas**: {stats.get('total_viral_images', 0)} imagens
+- **Plataformas Pesquisadas**: {', '.join(stats.get('platforms_searched', []))}
+- **Arquivos Adicionais**: {stats.get('additional_files_count', 0)} arquivos
+
+## CONTEÚDO TEXTUAL CONSOLIDADO
+
+### CONTEÚDO DE BUSCA
+"""
+        
+        # Adiciona conteúdo de busca
+        text_content = massive_data.get('consolidated_text_content', {})
+        search_content = text_content.get('search_content', [])
+        
+        for i, content in enumerate(search_content[:10]):  # Limita a 10 primeiros
+            context += f"\n**Fonte {i+1}**: {content[:1000]}...\n"
+        
+        context += "\n### CONTEÚDO VIRAL\n"
+        
+        # Adiciona conteúdo viral
+        viral_content = text_content.get('viral_content', [])
+        for i, content in enumerate(viral_content[:5]):  # Limita a 5 primeiros
+            context += f"\n**Viral {i+1}**: {content[:500]}...\n"
+        
+        context += "\n### DADOS ADICIONAIS\n"
+        
+        # Adiciona dados adicionais
+        additional_content = text_content.get('additional_content', [])
+        for i, content in enumerate(additional_content[:5]):  # Limita a 5 primeiros
+            context += f"\n**Adicional {i+1}**: {content[:500]}...\n"
+        
+        # Adiciona metadados de qualidade
+        quality_metrics = massive_data.get('data_quality_metrics', {})
+        context += f"""
+## MÉTRICAS DE QUALIDADE DOS DADOS
+- **Completude da Busca**: {quality_metrics.get('search_completeness', 'N/A')}
+- **Completude Viral**: {quality_metrics.get('viral_completeness', 'N/A')}
+- **Dados Adicionais Disponíveis**: {quality_metrics.get('additional_data_available', False)}
+- **Consolidação Bem-sucedida**: {quality_metrics.get('consolidation_success', False)}
+
+## CONTEXTO ORIGINAL
+{massive_data.get('session_metadata', {}).get('context', 'N/A')}
+"""
+        
+        logger.info(f"✅ Contexto preparado: {len(context)} caracteres")
+        return context
+
+    async def _execute_ai_synthesis_with_massive_data(
+        self, 
+        synthesis_context: str, 
+        synthesis_type: str, 
+        session_id: str, 
+        massive_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Executa síntese com IA usando dados massivos
+        
+        Args:
+            synthesis_context: Contexto preparado
+            synthesis_type: Tipo de síntese
+            session_id: ID da sessão
+            massive_data: Dados massivos originais
+        
+        Returns:
+            Dict: Resultado da síntese
+        """
+        
+        logger.info(f"🤖 Executando síntese com IA - Tipo: {synthesis_type}")
+        
+        try:
+            # Seleciona prompt baseado no tipo
+            base_prompt = self.synthesis_prompts.get(synthesis_type, self.synthesis_prompts['master_synthesis'])
+            
+            # Adiciona instruções específicas para dados massivos
+            massive_prompt = f"""
+{base_prompt}
+
+## INSTRUÇÕES ESPECIAIS PARA DADOS MASSIVOS
+
+Você está recebendo um JSON massivo consolidado com TODOS os dados da etapa 1:
+- Resultados de busca completos
+- Análise viral completa
+- Dados adicionais coletados
+- Estatísticas consolidadas
+
+**IMPORTANTE**: Use TODOS esses dados para criar uma síntese ultra-completa e detalhada.
+
+## DADOS CONSOLIDADOS:
+{synthesis_context}
+
+## SUA MISSÃO:
+Analise profundamente TODOS os dados fornecidos e crie uma síntese estruturada, acionável e baseada 100% nos dados reais consolidados.
+"""
+            
+            if not self.ai_manager:
+                raise Exception("AI Manager não disponível")
+            
+            # Executa síntese com busca ativa
+            synthesis_result = await self.ai_manager.generate_with_active_search(
+                prompt=massive_prompt,
+                context=synthesis_context,
+                session_id=session_id,
+                max_search_iterations=3  # Reduzido pois já temos dados massivos
+            )
+            
+            # Processa resultado
+            processed_result = {
+                "session_id": session_id,
+                "synthesis_type": synthesis_type,
+                "status": "completed",
+                "synthesis_content": synthesis_result,
+                "data_sources_used": {
+                    "search_sources": massive_data['consolidated_statistics']['total_search_sources'],
+                    "viral_content": massive_data['consolidated_statistics']['total_viral_content'],
+                    "additional_files": massive_data['consolidated_statistics']['additional_files_count'],
+                    "total_data_size": massive_data['consolidated_statistics']['total_data_size']
+                },
+                "timestamp": datetime.now().isoformat(),
+                "massive_data_used": True
+            }
+            
+            logger.info(f"✅ Síntese com dados massivos concluída")
+            return processed_result
+            
+        except Exception as e:
+            logger.error(f"❌ Erro na síntese com IA: {e}")
+            return {
+                "session_id": session_id,
+                "synthesis_type": synthesis_type,
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat(),
+                "massive_data_used": False
+            }
+
+    async def execute_behavioral_synthesis_with_massive_data(self, session_id: str, massive_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Executa síntese comportamental específica com dados massivos"""
+        return await self.execute_enhanced_synthesis_with_massive_data(session_id, massive_data, "behavioral_analysis")
+
+    async def execute_market_synthesis_with_massive_data(self, session_id: str, massive_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Executa síntese de mercado específica com dados massivos"""
+        return await self.execute_enhanced_synthesis_with_massive_data(session_id, massive_data, "deep_market_analysis")
 
     async def execute_behavioral_synthesis(self, session_id: str) -> Dict[str, Any]:
         """Executa síntese comportamental específica"""

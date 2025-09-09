@@ -165,6 +165,14 @@ def start_step1_collection():
                 # Salva relatório
                 _save_collection_report(collection_report, session_id)
 
+                # Consolida TODOS os dados da etapa 1 em um JSON massivo
+                massive_data_json = _consolidate_step1_massive_data(
+                    search_results, viral_analysis, viral_results, collection_report, session_id, context
+                )
+                
+                # Salva o JSON massivo consolidado
+                salvar_etapa("etapa1_massive_data", massive_data_json, categoria="consolidated", session_id=session_id)
+
                 # Salva resultado da etapa 1
                 salvar_etapa("etapa1_concluida", {
                     "session_id": session_id,
@@ -172,10 +180,16 @@ def start_step1_collection():
                     "viral_analysis": viral_analysis,
                     "viral_results": viral_results,
                     "collection_report_generated": True,
+                    "massive_data_consolidated": True,
                     "timestamp": datetime.now().isoformat()
                 }, categoria="workflow", session_id=session_id)
 
                 logger.info(f"✅ ETAPA 1 CONCLUÍDA - Sessão: {session_id}")
+                logger.info(f"📊 JSON Massivo consolidado com {len(str(massive_data_json))} caracteres")
+                
+                # Salva a sessão no sistema de persistência
+                from services.session_persistence_manager import session_manager
+                session_manager.save_session_from_analyses_data(session_id)
 
             except Exception as e:
                 logger.error(f"❌ Erro na execução da Etapa 1: {e}")
@@ -229,27 +243,63 @@ def start_step2_synthesis():
         # Executa síntese em thread separada
         def execute_synthesis():
             try:
+                # Carrega o JSON massivo consolidado da etapa 1
+                massive_data_json = _load_step1_massive_data(session_id)
+                
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
                 try:
-                    # Executa síntese master com busca ativa
-                    synthesis_result = loop.run_until_complete(
-                        enhanced_synthesis_engine.execute_enhanced_synthesis(
-                            session_id=session_id,
-                            synthesis_type="master_synthesis"
+                    if massive_data_json:
+                        # MODO PREFERIDO: Usa JSON massivo consolidado
+                        data_size = massive_data_json.get('consolidated_statistics', {}).get('total_data_size', len(str(massive_data_json)))
+                        logger.info(f"📊 Carregado JSON massivo com {data_size} caracteres")
+                        
+                        # Executa síntese master com o JSON massivo
+                        synthesis_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_enhanced_synthesis_with_massive_data(
+                                session_id=session_id,
+                                massive_data=massive_data_json,
+                                synthesis_type="master_synthesis"
+                            )
                         )
-                    )
 
-                    # Executa síntese comportamental
-                    behavioral_result = loop.run_until_complete(
-                        enhanced_synthesis_engine.execute_behavioral_synthesis(session_id)
-                    )
+                        # Executa síntese comportamental com o JSON massivo
+                        behavioral_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_behavioral_synthesis_with_massive_data(
+                                session_id=session_id,
+                                massive_data=massive_data_json
+                            )
+                        )
 
-                    # Executa síntese de mercado
-                    market_result = loop.run_until_complete(
-                        enhanced_synthesis_engine.execute_market_synthesis(session_id)
-                    )
+                        # Executa síntese de mercado com o JSON massivo
+                        market_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_market_synthesis_with_massive_data(
+                                session_id=session_id,
+                                massive_data=massive_data_json
+                            )
+                        )
+                    else:
+                        # MODO FALLBACK: Usa método tradicional
+                        logger.warning(f"⚠️ JSON massivo não encontrado, usando método tradicional para sessão: {session_id}")
+                        
+                        # Executa síntese master tradicional
+                        synthesis_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_enhanced_synthesis(
+                                session_id=session_id,
+                                synthesis_type="master_synthesis"
+                            )
+                        )
+
+                        # Executa síntese comportamental tradicional
+                        behavioral_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_behavioral_synthesis(session_id)
+                        )
+
+                        # Executa síntese de mercado tradicional
+                        market_result = loop.run_until_complete(
+                            enhanced_synthesis_engine.execute_market_synthesis(session_id)
+                        )
 
                 finally:
                     loop.close()
@@ -264,6 +314,10 @@ def start_step2_synthesis():
                 }, categoria="workflow", session_id=session_id)
 
                 logger.info(f"✅ ETAPA 2 CONCLUÍDA - Sessão: {session_id}")
+                
+                # Salva a sessão no sistema de persistência
+                from services.session_persistence_manager import session_manager
+                session_manager.save_session_from_analyses_data(session_id)
 
             except Exception as e:
                 logger.error(f"❌ Erro na execução da Etapa 2: {e}")
@@ -383,7 +437,11 @@ def start_step3_generation():
                 }, categoria="workflow", session_id=session_id)
 
                 logger.info(f"✅ ETAPA 3 CONCLUÍDA - Sessão: {session_id}")
-                logger.info(f"📊 {modules_result.get('successful_modules', 0)}/16 módulos gerados")
+                logger.info(f"📊 {modules_result.get('processing_summary', {}).get('successful_modules', 0)}/16 módulos gerados")
+                
+                # Salva a sessão no sistema de persistência
+                from services.session_persistence_manager import session_manager
+                session_manager.save_session_from_analyses_data(session_id)
 
             except Exception as e:
                 logger.error(f"❌ Erro na execução da Etapa 3: {e}")
@@ -859,6 +917,192 @@ def download_workflow_file(session_id, file_type):
         return jsonify({"error": str(e)}), 500
 
 # --- Funções auxiliares ---
+def _consolidate_step1_massive_data(search_results, viral_analysis, viral_results, collection_report, session_id, context):
+    """
+    Consolida TODOS os dados da etapa 1 em um JSON massivo único
+    
+    Args:
+        search_results: Resultados da busca massiva
+        viral_analysis: Análise de conteúdo viral
+        viral_results: Resultados específicos do viral
+        collection_report: Relatório de coleta
+        session_id: ID da sessão
+        context: Contexto da análise
+    
+    Returns:
+        Dict: JSON massivo consolidado com todos os dados da etapa 1
+    """
+    
+    logger.info(f"🔄 Consolidando dados massivos da etapa 1 - Sessão: {session_id}")
+    
+    # Carrega dados adicionais salvos durante a etapa 1
+    additional_data = {}
+    try:
+        # Busca por arquivos de dados salvos durante a etapa 1
+        import glob
+        data_files = glob.glob(f"analyses_data/{session_id}/**/*.json", recursive=True)
+        
+        for file_path in data_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    file_data = json.load(f)
+                    file_name = os.path.basename(file_path).replace('.json', '')
+                    additional_data[file_name] = file_data
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao carregar {file_path}: {e}")
+                
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao buscar dados adicionais: {e}")
+    
+    # Consolida TUDO em um JSON massivo
+    massive_data = {
+        "session_metadata": {
+            "session_id": session_id,
+            "consolidated_at": datetime.now().isoformat(),
+            "context": context,
+            "data_sources": ["search_results", "viral_analysis", "viral_results", "collection_report", "additional_files"]
+        },
+        
+        # DADOS PRINCIPAIS DA BUSCA
+        "search_results": search_results,
+        
+        # DADOS DE ANÁLISE VIRAL
+        "viral_analysis": viral_analysis,
+        "viral_results": viral_results,
+        
+        # RELATÓRIO DE COLETA
+        "collection_report": collection_report,
+        
+        # DADOS ADICIONAIS SALVOS
+        "additional_data": additional_data,
+        
+        # ESTATÍSTICAS CONSOLIDADAS
+        "consolidated_statistics": {
+            "total_search_sources": len(search_results.get('sources', [])) if search_results else 0,
+            "total_content_length": sum(len(str(content)) for content in search_results.get('extracted_content', [])) if search_results and search_results.get('extracted_content') else 0,
+            "total_viral_content": len(viral_analysis.get('viral_content', [])) if viral_analysis else 0,
+            "total_viral_images": viral_results.get('total_images_saved', 0) if viral_results else 0,
+            "platforms_searched": list(search_results.get('platforms', {}).keys()) if search_results and search_results.get('platforms') else [],
+            "additional_files_count": len(additional_data),
+            "total_data_size": len(str(search_results)) + len(str(viral_analysis)) + len(str(viral_results)) + len(str(additional_data))
+        },
+        
+        # CONTEÚDO TEXTUAL CONSOLIDADO
+        "consolidated_text_content": _extract_all_text_content(search_results, viral_analysis, viral_results, additional_data),
+        
+        # METADADOS DE QUALIDADE
+        "data_quality_metrics": {
+            "search_completeness": "complete" if search_results else "incomplete",
+            "viral_completeness": "complete" if viral_analysis else "incomplete",
+            "additional_data_available": len(additional_data) > 0,
+            "consolidation_success": True
+        }
+    }
+    
+    logger.info(f"✅ Dados consolidados: {massive_data['consolidated_statistics']['total_data_size']} caracteres")
+    logger.info(f"📊 Fontes: {massive_data['consolidated_statistics']['total_search_sources']} | Viral: {massive_data['consolidated_statistics']['total_viral_content']} | Arquivos: {massive_data['consolidated_statistics']['additional_files_count']}")
+    
+    return massive_data
+
+def _extract_all_text_content(search_results, viral_analysis, viral_results, additional_data):
+    """
+    Extrai todo o conteúdo textual dos dados para facilitar processamento pela IA
+    
+    Returns:
+        Dict: Conteúdo textual organizado por categoria
+    """
+    
+    text_content = {
+        "search_content": [],
+        "viral_content": [],
+        "additional_content": [],
+        "metadata_content": []
+    }
+    
+    # Extrai conteúdo da busca
+    if search_results:
+        if search_results.get('extracted_content'):
+            for content in search_results['extracted_content']:
+                if isinstance(content, dict):
+                    text_content["search_content"].append(str(content))
+                else:
+                    text_content["search_content"].append(content)
+        
+        if search_results.get('sources'):
+            for source in search_results['sources']:
+                if isinstance(source, dict) and source.get('content'):
+                    text_content["search_content"].append(source['content'])
+    
+    # Extrai conteúdo viral
+    if viral_analysis:
+        if viral_analysis.get('viral_content'):
+            for content in viral_analysis['viral_content']:
+                text_content["viral_content"].append(str(content))
+        
+        if viral_analysis.get('analysis_text'):
+            text_content["viral_content"].append(viral_analysis['analysis_text'])
+    
+    if viral_results:
+        if viral_results.get('viral_images'):
+            for image in viral_results['viral_images']:
+                if isinstance(image, dict):
+                    # Extrai metadados textuais das imagens
+                    image_text = f"Imagem: {image.get('title', '')} - {image.get('description', '')} - Plataforma: {image.get('platform', '')}"
+                    text_content["viral_content"].append(image_text)
+    
+    # Extrai conteúdo adicional
+    for file_name, file_data in additional_data.items():
+        text_content["additional_content"].append(f"Arquivo {file_name}: {str(file_data)}")
+    
+    return text_content
+
+def _load_step1_massive_data(session_id):
+    """
+    Carrega o JSON massivo consolidado da etapa 1
+    
+    Args:
+        session_id: ID da sessão
+    
+    Returns:
+        Dict: JSON massivo consolidado ou None se não encontrado
+    """
+    
+    try:
+        # Busca pelo arquivo do JSON massivo em múltiplos locais
+        import glob
+        
+        # Padrões de busca para o arquivo JSON massivo
+        search_patterns = [
+            f"relatorios_intermediarios/consolidated/{session_id}/etapa1_massive_data*.json",
+            f"analyses_data/{session_id}/**/etapa1_massive_data*.json",
+            f"analyses_data/{session_id}/etapa1_massive_data*.json",
+            f"relatorios_intermediarios/**/etapa1_massive_data*{session_id}*.json"
+        ]
+        
+        massive_data_files = []
+        for pattern in search_patterns:
+            files = glob.glob(pattern, recursive=True)
+            massive_data_files.extend(files)
+        
+        if not massive_data_files:
+            logger.warning(f"⚠️ JSON massivo não encontrado para sessão: {session_id}")
+            logger.warning(f"⚠️ Padrões de busca utilizados: {search_patterns}")
+            return None
+        
+        # Carrega o arquivo mais recente
+        latest_file = max(massive_data_files, key=os.path.getctime)
+        
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            massive_data = json.load(f)
+        
+        logger.info(f"✅ JSON massivo carregado: {latest_file}")
+        logger.info(f"📊 Dados carregados: {len(str(massive_data))} caracteres")
+        return massive_data
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao carregar JSON massivo da sessão {session_id}: {e}")
+        return None
+
 def _generate_collection_report(
     search_results: Dict[str, Any],
     viral_analysis: Dict[str, Any],

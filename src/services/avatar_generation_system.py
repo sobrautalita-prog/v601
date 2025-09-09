@@ -940,3 +940,4 @@ if __name__ == "__main__":
         #     print(f"\n✅ Avatares salvos em: {caminho_salvo}")
 
     asyncio.run(main())
+
